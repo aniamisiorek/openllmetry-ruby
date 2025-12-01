@@ -229,7 +229,7 @@ module Traceloop
           content_filtered = guardrail_content_filtered(r)
 
           attrs = {
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_PROMPTS}.prompt_filter_results" => response,
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_PROMPTS}.prompt_filter_results" => r["action"] || "NONE",
 
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.activation" => activation,         # boolean
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.words"      => blocked_words,      # integer
