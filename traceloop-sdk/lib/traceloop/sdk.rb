@@ -71,6 +71,8 @@ module Traceloop
           # https://github.com/gbaptista/gemini-ai?tab=readme-ov-file#generate_content
           elsif response.respond_to?(:has_key?) && response.has_key?("candidates")
             log_gemini_response(response)
+          elsif response.is_a?(String)
+            log_string_message(response)
           else
             log_openai_response(response)
           end
@@ -104,6 +106,15 @@ module Traceloop
              "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_COMPLETIONS}.0.role" => "tool",
              "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_COMPLETIONS}.0.content" => response.content
           })
+        end
+
+        # enables users to log messages with raw text that did not come from an LLM, this allows DT to complete traces
+        def log_string_message(response)
+          @span.add_attributes({
+           OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_RESPONSE_MODEL => @model,
+           "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_COMPLETIONS}.0.role" => "assistant",
+           "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_COMPLETIONS}.0.content" => response
+        })
         end
 
         def log_bedrock_response(response)
