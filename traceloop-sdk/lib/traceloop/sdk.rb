@@ -155,90 +155,26 @@ module Traceloop
             })
           end
         end
-      end
-
-      def llm_call(provider, model, conversation_id: nil)
-        @tracer.in_span("#{provider}.chat") do |span|
-          attributes = {
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_REQUEST_MODEL => model,
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_SYSTEM => provider,
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_PROVIDER => provider,
-          }
-
-          if conversation_id
-            attributes[OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_CONVERSATION_ID] = conversation_id
-          end
-
-          span.add_attributes(attributes)
-          yield Tracer.new(span, provider, model)
-        end
-      end
-
-      def workflow(name)
-        @tracer.in_span("#{name}.workflow") do |span|
-          span.add_attributes({
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_SPAN_KIND => "workflow",
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_ENTITY_NAME => name,
-          })
-          yield
-        end
-      end
-
-      def task(name)
-        @tracer.in_span("#{name}.task") do |span|
-          span.add_attributes({
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_SPAN_KIND => "task",
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_ENTITY_NAME => name,
-          })
-          yield
-        end
-      end
-
-      def agent(name)
-        @tracer.in_span("#{name}.agent") do |span|
-          span.add_attributes({
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_SPAN_KIND => "agent",
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_ENTITY_NAME => name,
-          })
-          yield
-        end
-      end
-
-      def tool(name)
-        @tracer.in_span("#{name}.tool") do |span|
-          span.add_attributes({
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_SPAN_KIND => "tool",
-            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_ENTITY_NAME => name,
-          })
-          yield
-        end
-      end
-
-      class GuardrailTracer
-        def initialize(span, provider)
-          @span = span
-          @provider = provider
-        end
 
         def log_guardrail_response(response)
-          # Normalize keys to strings to make access easier
           r = deep_stringify_keys(response || {})
 
-          activation = guardrail_activation(r)
-          blocked_words = guardrail_blocked_words(r)
+          activation      = guardrail_activation(r)
+          blocked_words   = guardrail_blocked_words(r)
           content_filtered = guardrail_content_filtered(r)
 
           attrs = {
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_PROMPTS}.prompt_filter_results" => r["action"] || "NONE",
 
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.activation" => activation,         # boolean
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.words"      => blocked_words,      # integer
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.content"    => content_filtered,   # integer (0/1)
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.activation" => activation,
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.words" => blocked_words,
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.content" => content_filtered,
 
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.action"                 => r["action"] || "NONE",
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.content_policy_units"   => (r.dig("usage", "content_policy_units") || 0),
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.word_policy_units"      => (r.dig("usage", "word_policy_units") || 0),
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.topic_policy_units"     => (r.dig("usage", "topic_policy_units") || 0),
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.action" => r["action"] || "NONE",
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.action_reason" => r["action_reason"] || "No action.",
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.content_policy_units" => (r.dig("usage", "content_policy_units") || 0),
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.word_policy_units" => (r.dig("usage", "word_policy_units") || 0),
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.topic_policy_units" => (r.dig("usage", "topic_policy_units") || 0),
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.sensitive_policy_units" => (r.dig("usage", "sensitive_information_policy_units") || 0)
           }
 
@@ -318,9 +254,10 @@ module Traceloop
         end
       end
 
-      def guardrail(name, provider, conversation_id: nil)
-        @tracer.in_span("#{name}.guardrails") do |span|
+      def llm_call(provider, model, conversation_id: nil)
+        @tracer.in_span("#{provider}.chat") do |span|
           attributes = {
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_REQUEST_MODEL => model,
             OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_SYSTEM => provider,
             OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_PROVIDER => provider,
           }
@@ -330,7 +267,64 @@ module Traceloop
           end
 
           span.add_attributes(attributes)
-          yield GuardrailTracer.new(span, provider)
+          yield Tracer.new(span, provider, model)
+        end
+      end
+
+      def workflow(name)
+        @tracer.in_span("#{name}.workflow") do |span|
+          span.add_attributes({
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_SPAN_KIND => "workflow",
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_ENTITY_NAME => name,
+          })
+          yield
+        end
+      end
+
+      def task(name)
+        @tracer.in_span("#{name}.task") do |span|
+          span.add_attributes({
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_SPAN_KIND => "task",
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_ENTITY_NAME => name,
+          })
+          yield
+        end
+      end
+
+      def agent(name)
+        @tracer.in_span("#{name}.agent") do |span|
+          span.add_attributes({
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_SPAN_KIND => "agent",
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_ENTITY_NAME => name,
+          })
+          yield
+        end
+      end
+
+      def tool(name)
+        @tracer.in_span("#{name}.tool") do |span|
+          span.add_attributes({
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_SPAN_KIND => "tool",
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::TRACELOOP_ENTITY_NAME => name,
+          })
+          yield
+        end
+      end
+
+      def guardrail(name, provider, conversation_id: nil)
+        @tracer.in_span("#{name}.guardrails") do |span|
+          attributes = {
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_SYSTEM => provider,
+            OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_PROVIDER => provider,
+          }
+
+          if conversation_id
+            attributes[OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_CONVERSATION_ID] =
+              conversation_id
+          end
+
+          span.add_attributes(attributes)
+          yield
         end
       end
     end
