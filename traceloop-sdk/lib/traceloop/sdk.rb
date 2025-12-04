@@ -175,7 +175,7 @@ module Traceloop
           content_filtered, type, confidence = guardrail_content_filtered(r)
 
           attrs = {
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_PROMPTS}.prompt_filter_results" => r["action"] || "NONE",
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_PROMPTS}.prompt_filter_results" => [type, confidence].to_s,
 
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.activation" => activation,
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.words" => words_blocked,
@@ -183,9 +183,7 @@ module Traceloop
 
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.action" => r["action"] || "NONE",
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.action_reason" => r["action_reason"] || "No action.",
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.words.blocked_words_detected" => blocked_words.to_s,
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.content.type" => type,
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.content.confidence" => confidence,
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.words.blocked_words" => blocked_words.to_s,
           }
 
           @span.add_attributes(attrs)
@@ -249,17 +247,16 @@ module Traceloop
         end
 
         def guardrail_content_filtered(r)
-          action = r["action"]
-          return 1 if action && action != "NONE"
-
           assessments = r["assessments"] || []
           assessments.each do |a|
             filters = a.dig("content_policy", "filters") || []
             filters.each do |f|
               detected = f["detected"]
               action = f["action"]
+              type = f["type"]
+              confidence = f["confidence"]
 
-              return [1, f["type"], f["confidence"]] if detected == true || (detected && action != "NONE")
+              return [1, type, confidence] if detected == true || (detected && action != "NONE")
             end
           end
 
