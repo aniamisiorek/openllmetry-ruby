@@ -170,23 +170,22 @@ module Traceloop
         def log_guardrail_response(response)
           r = deep_stringify_keys(response || {})
 
-          activation      = guardrail_activation(r)
-          blocked_words   = guardrail_blocked_words(r)
-          content_filtered = guardrail_content_filtered(r)
+          activation = guardrail_activation(r)
+          words_blocked, blocked_words = guardrail_blocked_words(r)
+          content_filtered, type, confidence = guardrail_content_filtered(r)
 
           attrs = {
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_PROMPTS}.prompt_filter_results" => r["action"] || "NONE",
 
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.activation" => activation,
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.words" => blocked_words,
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.words" => words_blocked,
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.content" => content_filtered,
 
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.action" => r["action"] || "NONE",
             "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.action_reason" => r["action_reason"] || "No action.",
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.content_policy_units" => (r.dig("usage", "content_policy_units") || 0),
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.word_policy_units" => (r.dig("usage", "word_policy_units") || 0),
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.topic_policy_units" => (r.dig("usage", "topic_policy_units") || 0),
-            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.sensitive_policy_units" => (r.dig("usage", "sensitive_information_policy_units") || 0)
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.words.blocked_words_detected" => blocked_words.to_s,
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.content.type" => type,
+            "#{OpenTelemetry::SemanticConventionsAi::SpanAttributes::GEN_AI_BEDROCK_GUARDRAILS}.content.confidence" => confidence,
           }
 
           @span.add_attributes(attrs)
@@ -223,6 +222,7 @@ module Traceloop
           assessments = r["assessments"] || []
 
           total = 0
+          blocked_words = []
 
           assessments.each do |a|
             word_policy = a["word_policy"] || {}
@@ -232,6 +232,7 @@ module Traceloop
             custom_words.each do |cw|
               if cw["detected"] == true || cw["action"] == "BLOCKED"
                 total += 1
+                blocked_words.append(cw["match"])
               end
             end
 
@@ -239,11 +240,12 @@ module Traceloop
             managed_lists.each do |entry|
               if entry["detected"] == true || entry["action"] == "BLOCKED"
                 total += 1
+                blocked_words.append(entry["match"])
               end
             end
           end
 
-          total
+          [total, blocked_words]
         end
 
         def guardrail_content_filtered(r)
@@ -255,13 +257,13 @@ module Traceloop
             filters = a.dig("content_policy", "filters") || []
             filters.each do |f|
               detected = f["detected"]
-              fa       = f["action"]
+              action = f["action"]
 
-              return 1 if detected == true || (fa && fa != "NONE")
+              return [1, f["type"], f["confidence"]] if detected == true || (detected && action != "NONE")
             end
           end
 
-          0
+          [0, "", ""]
         end
       end
 
